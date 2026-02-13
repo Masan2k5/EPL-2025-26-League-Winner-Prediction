@@ -471,6 +471,7 @@ making our method of calculating the power score decently accurate.
     ## `geom_smooth()` using formula = 'y ~ x'
 
 ![](COMP2501_Project_Report_Masud_Muradli_files/figure-markdown_strict/unnamed-chunk-11-1.png)
+![](00001a.png)
 
 This is the quadrant plot between attack and defense scores of each team
 for every season. After creating the plot, we can see that the league
@@ -505,6 +506,7 @@ score) become champions of the Premier League.
       theme_minimal(base_size = 15)
 
 ![](COMP2501_Project_Report_Masud_Muradli_files/figure-markdown_strict/unnamed-chunk-12-1.png)
+![](000028.png)
 
 This is the bar plot comparing the power scores of Arsenal, Manchester
 City and Liverpool for every season. After creating the plot, we can see
@@ -524,6 +526,7 @@ League this season.
       theme_minimal(base_size = 15)
 
 ![](COMP2501_Project_Report_Masud_Muradli_files/figure-markdown_strict/unnamed-chunk-13-1.png)
+![](000016.png)
 
 This is the line plot comparing the power scores of Arsenal, Manchester
 City and Liverpool for every season. After creating the plot, we can see
@@ -541,3 +544,4 @@ League this season.
       theme_minimal(base_size = 15)
 
 ![](COMP2501_Project_Report_Masud_Muradli_files/figure-markdown_strict/unnamed-chunk-14-1.png)
+![](000018.png)
