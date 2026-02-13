@@ -1,0 +1,217 @@
+---
+title: "Analyisis Of Arsenal's Title Charge In Last Three Seasons"
+author: "Masud Muradli"
+date: "2025-12-02"
+output: html_document
+---
+
+In this report we will analyze the causes of Arsenal Football Club falling short of the English Premier League title in the seasons 2022-2023, 2023-2024, and 2024-2025 seasons, as these were the seasons where the club mounted a serious title charge and fell short, finishing 2nd in each of these seasons. Although there are countless factors contributing to Arsenal's recent failure to win a championship, we will mainly focus on the three factors: Attack, Defense, and Discipline and use these to compare how Arsenal fares in comparison to other title rivals, mainly Manchester City and Liverpool. We will also create a new factor called Power Score, where it will be based on the other three factors to calculate the "deservedness" of winning the Premier League title. And lastly, alongside the last three seasons, we will also analyze the current season until Gameweek 13, to predict if Arsenal will win the Premier League title or not. So, we go ahead with two questions: 
+
+1. Why Arsenal Failed to win the Premier League in the Last three seasons? 
+2. Will Arsenal win the Premier League title this season? We will use multiple data visualizations to assist us in finding the likely potential answers to these questions.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We load five libraries: dplyr, scales, tidyr, ggplot2, and ggrepel for our project. dplyr for various types of data manipulation, scales to help us scale factors from 0-100, tidyr to create tidy datasets, ggplot2 for data visualization, and ggrpel for manipulating texts so they don't overlap with each other.
+
+```{r, warning = FALSE}
+library(dplyr)
+library(scales)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+```
+
+Since I've downloaded the files rather than extracted from web link, I have to set my current working directory to the one where the files are and read the csv files. The source of the csv files are from Stathead FBRef (https://www.sports-reference.com/stathead/fbref/). We've filtered the data to find our desired options, converted the tables to csv texts for copying, pasted them into a text editor and saved as a csv file. There are three csv files: AttackandDefense.csv, which includes Goals For (GF), Goals Against (GA), Expected Goals (xG), and Expected Goal Difference (xGD), which will help us calculate the Attack and Defense level of each team; Discipline.csv, which includes the number of yellow, red, and double yellow cards, which will help us calculate the impact of suspensions and sending-offs for each team; LeagueStandings.csv, which includes the league position of every team. All of these data are from seasons 2022-2023 up to 2025-2026 (Until GW13). 
+
+```{r}
+setwd("~/Desktop/COMP2501/proj_files")
+attdefdf <- read.csv("AttackandDefense.csv")
+discdf <- read.csv("Discipline.csv")
+leaguedf <- read.csv("LeagueStandings.csv")
+```
+
+Some column names of the dataframes above are little different. So, we changed them below for tidying purposes.
+
+```{r}
+names(attdefdf)[names(attdefdf) == "Season."] <- "Season"
+names(discdf)[names(discdf) == "Season."] <- "Season"
+names(leaguedf)[names(leaguedf) == "LgRank."] <- "LgRank"
+```
+
+This is the function where the values of a vector are scaled from 0 to 100, with 100 being the highest and 0 being the lowest. If every element in the vector is NA, the vector will return unchanged. If all of the values of the vector are equal, 100 will be assigned to them. Then with the function rescale, the vector will be scales from 0 to 100. Formula is scaled_value = (x - min(x)) / (max(x) - min(x)) * 100, where x is a value inside the vector. 
+
+```{r}
+scale_0_100 <- function(x) {
+  if (all(is.na(x))) {
+    return(x)
+  }
+  if (max(x, na.rm = TRUE) == min(x, na.rm = TRUE)) {
+    output <- rep(NA_real_, length(x))
+    output[!is.na(x)] <- 100
+    return(output)
+  }
+  rescale(x, to = c(0, 100))
+}
+```
+
+This is the Table of Attack Score for each team. Attack Score is the scaling of the sum of Scored Goals (GF) and Expected Goals (xG) of every team. xG is represented as xG.1 in the data frame attdefdf. It first groups attdefdf by season, then adds a new column called AttackScore where AttackScore = scale_0_100(GF + xG.1), then later selects the columns Team, Season, and AttackScore. Attack is transformed into a wider format as AttackScoreTable and the values are sorted by team name.
+
+```{r}
+Attack <- attdefdf |> 
+  group_by(Season) |> 
+  mutate(AttackScore = scale_0_100(GF + xG.1)) |> 
+  ungroup() |> 
+  select(Team, Season, AttackScore)
+
+AttackScoreTable <- Attack |> 
+  pivot_wider(names_from = Season, values_from = AttackScore) |>
+  arrange(Team)
+```
+
+This is the Table of Defense Score for each team. Defense Score is the inverse scaling of the sum of Goals Conceded (GA) and Expected Goals Against (xGA) of every team. First, Defense Point is calculated as GA + xGA into attdefdf. xGA is calculated as xG - xGD. Then attdefdf is grouped by season, a new column called DefenseScore where DefenseScore = scale_0_100(max(DefensePoint) - DefensePoint) is added (NA is ignored), and columns Team, Season, and DefenseScore are selected. Defense is transformed into a wider format as DefenseScoreTable and the values are sorted by team name.
+
+```{r}
+Defense <- attdefdf |>
+  mutate(DefensePoint = GA + (xG - xGD)) |> 
+    group_by(Season) |> 
+      mutate(DefenseScore = scale_0_100(max(DefensePoint, na.rm = TRUE) - DefensePoint)) |> 
+      ungroup() |> 
+      select(Team, Season, DefenseScore)
+
+DefenseScoreTable <- Defense |> 
+  pivot_wider(names_from = Season, values_from = DefenseScore) |> 
+  arrange(Team)
+```
+
+This is the Table of Discipline Score for each team. Discipline Score is the inverse scaling of (0.25 x Yellow Cards + 3 x Red Cards + Double-Yellow Cards). The Calculations are done so to approximate the potential impact a single card could have on a team's performance. First, Discipline Point is calculated as (0.25)CrdY + 3CrdR + X2CrdY into discdf (CrdY is represented as CrdY.1). Then discdf is grouped by season, a new column called DisciplineScore where DisciplineScore = scale_0_100(max(DisciplinePoint) - DisciplinePoint) is added (NA is ignored), and columns Team, Season, and DisciplineScore are selected. Discipline is transformed into a wider format as DisciplineScoreTable and the values are sorted by team name.
+
+```{r}
+Discipline <- discdf |> 
+  mutate(DisciplinePoint = 0.25*CrdY.1 + 3*CrdR + X2CrdY) |> 
+  group_by(Season) |> 
+  mutate(DisciplineScore = scale_0_100(max(DisciplinePoint, na.rm = TRUE) - DisciplinePoint)) |> 
+  ungroup() |> 
+  select(Team, Season, DisciplineScore)
+
+DisciplineScoreTable <- Discipline |> 
+  pivot_wider(names_from = Season, values_from = DisciplineScore) |> 
+  arrange(Team)
+```
+
+However, calculating the Attack, Defense, and Discipline scores are not sufficient enough to determine if Arsenal really deserved to win the league or not. For this, we calculate Power Score, which is equal to 0.45 x Attack Score + 0.45 x Defense Score + 0.1 x Discipline Score, scaled from 0 to 100. The calculations are done to show that the Attacking and Defensive qualities matter more to the Team than its Discipline. First, Defense and Discipline columns are added into Attack data frame, then a new column called Power Score where PowerScore = scale_0_100(0.45 * AttackScore + 0.45 * DefenseScore + 0.1 * DisciplineScore) is added. Then Team, Season and PowerScore columns are selected from Power and transformed into a wider format as PowerScoreTable and the values are sorted by team name.
+
+```{r}
+Power <- Attack |> 
+  left_join(Defense, by = c("Team", "Season")) |> 
+  left_join(Discipline, by = c("Team", "Season")) |> 
+  group_by(Season) |> 
+  mutate(PowerScore = scale_0_100(0.45 * AttackScore + 0.45 * DefenseScore + 0.1 * DisciplineScore)) |>
+  ungroup()
+
+PowerScoreTable <- Power|>
+  select(Team, Season, PowerScore) |>
+  pivot_wider(names_from = Season, values_from = PowerScore) |> 
+  arrange(Team)
+```
+
+This prints the Tables of each of the 4 factors for the seasons 2022-2023, 2023-2024 and 2024-2025. It is used for analyzing past data. With this we can select a few points. In 2022-2023, Manchester City had the best defense and Attack. In 2023-2024, Arsenal had the best defence, but Manchester City had the best Attack. In 2024-2025, Liverpool had the best attack, but Arsenal had the best defence. Discipline-wise, West Ham, Luton Town, and Brentford had the best Discipline score in 2022-2023, 2023-2024 and 2024-2025, respectively. Now, looking at the PowerScoreTable, we can see why the Premier League champions deserved to be champions. Every team had a Power Score of 100 in the season they won the Premier League.
+
+```{r}
+AttackScoreTable |> select("Team", "2024-2025", "2023-2024", "2022-2023") |> print(n = Inf)
+DefenseScoreTable |> select("Team", "2024-2025", "2023-2024", "2022-2023") |> print(n = Inf)
+DisciplineScoreTable |> select("Team", "2024-2025", "2023-2024", "2022-2023") |> print(n = Inf)
+PowerScoreTable |> select("Team", "2024-2025", "2023-2024", "2022-2023") |> print(n = Inf)
+```
+
+This prints the Tables of each of the 4 factors for the 2025-2026 season until Gameweek 13, arranged in the descending order score-wise. It is used for predictive purposes. Having analyzed the past seasons, we now focus on the current season. Currently, Manchester City has the best attack, and Arsenal has the best defence and Disciplinary record. When we look at the power score, we can see that Arsenal currently has the highest power score. So, we can predict that Arsenal is the most likely team to win the Premier League this season and if it continues like this, they will deservedly win so. We will now do data visualization to demonstrate why the calculations we made until now makes sense. 
+
+```{r}
+AttackScoreTable |> select("Team", "2025-2026") |> arrange(desc(`2025-2026`)) |> print(n = Inf)
+DefenseScoreTable |> select("Team", "2025-2026") |> arrange(desc(`2025-2026`)) |> print(n = Inf)
+DisciplineScoreTable |> select("Team", "2025-2026") |> arrange(desc(`2025-2026`)) |> print(n = Inf)
+PowerScoreTable |> select("Team", "2025-2026") |> arrange(desc(`2025-2026`)) |> print(n = Inf)
+```
+
+This is the correlation plot between power score and league position of each team for every season. After creating the plot, we can see that the distance between the points and the correlation line is actually close, making our method of calculating the power score decently accurate.  
+
+```{r}
+league_select <- leaguedf |> select("Team", "Season", "LgRank")
+
+PowerAndLeague <- Power |> 
+  left_join(league_select, by = c("Team", "Season")) |> 
+  filter(!is.na(PowerScore), !is.na(LgRank))
+
+PowerAndLeague |> 
+  ggplot(aes(x = PowerScore, y = LgRank)) + 
+  geom_point(size = 2, alpha = 0.8) + 
+  geom_smooth(method = "lm", linewidth = 1, se = FALSE, color = "red") + 
+  scale_y_reverse(breaks = c(1, 5, 10, 15, 20)) + 
+  facet_wrap(~Season, ncol = 2) + 
+  labs(title = "Correlation between Power score and League position", x = "Power Score", y = "League Position") + theme_minimal(base_size = 15)
+```
+
+This is the quadrant plot between attack and defense scores of each team for every season. After creating the plot, we can see that the league title contenders fall into the top-right quadrant and the ones with both the best attack and defense overall (major contributors to the power score) become champions of the Premier League.
+
+```{r}
+quadrantdf <- Power |> 
+  select(Team, Season, AttackScore, DefenseScore)
+
+quadrantMedians <- quadrantdf |>
+  group_by(Season) |>
+  summarize(attmedian = median(quadrantdf$AttackScore, na.rm = TRUE),
+            defmedian = median(quadrantdf$DefenseScore, na.rm = TRUE))
+
+important_labels <- c("Arsenal", "Manchester City", "Liverpool")
+
+labelsdf <- quadrantdf |>
+  left_join(quadrantMedians, by = "Season") |>
+  filter(Team %in% important_labels)
+
+quadrantdf |> 
+  left_join(quadrantMedians, by = "Season") |>
+  ggplot(aes(x = AttackScore, y = DefenseScore, label = Team)) +
+  geom_vline(aes(xintercept = attmedian), linetype = "dashed", color = "gray") +
+  geom_hline(aes(yintercept = defmedian), linetype = "dashed", color = "gray") +
+  geom_point(size = 4, color = "red", alpha = 0.5) + 
+  facet_wrap(~Season, ncol = 2) +
+  geom_text_repel(data = labelsdf, aes(label = Team), size = 4, fontface = "bold") + 
+  labs(title = "Attack and Defense scores of EPL teams", subtitle = "All Seasons", 
+       x = "Attack Score", y = "Defense Score") + 
+  theme_minimal(base_size = 15)
+
+```
+
+This is the bar plot comparing the power scores of Arsenal, Manchester City and Liverpool for every season. After creating the plot, we can see how Arsenal and its title rivals' power scores changed over the seasons and is a factor in showing the likeliness of Arsenal winning the Premier League this season. 
+
+```{r}
+PowerTitleContenders <- Power |>
+  filter(Team %in% important_labels)
+
+PowerTitleContenders |>
+  ggplot(aes(x = Season, y = PowerScore, fill = Team)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  labs(title = "Power scores of Premier League title contenders", subtitle = "All seasons",
+       x = "Season", y = "Power Score", 
+       fill = "Team") +
+  theme_minimal(base_size = 15)
+
+```
+
+This is the line plot comparing the power scores of Arsenal, Manchester City and Liverpool for every season. After creating the plot, we can see how Arsenal and its title rivals' power scores changed over the seasons and is a factor in showing the likeliness of Arsenal winning the Premier League this season. 
+
+```{r}
+PowerTitleContenders |>
+  ggplot(aes(x=Season, y=PowerScore, group=Team, color=Team)) +
+  geom_line(linewidth = 1.5) +
+  geom_point(size = 3) +
+  labs(title = "Power score changes of Premier League title contenders", subtitle = "All seasons",
+       x = "Season", y = "Power Score", 
+       fill = "Team") +
+  theme_minimal(base_size = 15)
+
+```
+
+
